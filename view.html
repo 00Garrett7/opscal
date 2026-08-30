@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ops Cal — Snapshot</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1c1917;color:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;line-height:1.5}
+a{color:#67e8f9}a:hover{color:#a5f3fc}
+.wrap{max-width:640px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+h1{font-size:18px;font-weight:600}
+.upd{font-size:12px;color:#78716c}
+.ro{font-size:11px;color:#78716c;margin-bottom:20px}
+h2{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#a8a29e;margin:24px 0 8px}
+.card{background:#292524;border:1px solid #3b3835;border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.card.mit{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.4)}
+.card.done{opacity:.6}
+.t{font-weight:500}
+.done .t{text-decoration:line-through;color:#78716c}
+.star{color:#fbbf24;margin-right:4px}
+.chk{color:#34d399;margin-right:4px}
+.meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;font-size:12px;color:#a8a29e}
+.pill{padding:1px 8px;border-radius:999px;background:#44403c;font-size:11px}
+.notes{margin-top:6px;font-size:12px;color:#a8a29e;white-space:pre-wrap}
+.subs{margin-top:6px;display:flex;flex-direction:column;gap:2px;font-size:12px;color:#d6d3d1}
+.subs .sdone{color:#78716c;text-decoration:line-through}
+.prog{font-size:12px;color:#a8a29e;white-space:nowrap}
+.bar{height:4px;border-radius:2px;background:#44403c;margin-top:8px;overflow:hidden}
+.bar>div{height:100%;background:#34d399}
+.steps{margin-top:8px;display:flex;flex-direction:column;gap:3px;font-size:12px}
+.steps .sdone{color:#78716c;text-decoration:line-through}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.empty{color:#78716c;font-size:13px;padding:8px 0}
+.state{color:#a8a29e;text-align:center;padding:60px 16px}
+button{background:#292524;color:#d6d3d1;border:1px solid #44403c;border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer}
+button:hover{background:#3b3835}
+.foot{margin-top:28px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap"><div id="app" class="state">Loading…</div></div>
+<script>
+(function(){
+const $=document.getElementById('app');
+const qs=new URLSearchParams(location.search);
+const gid=(qs.get('g')||'').trim();
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const tk=()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());};
+const fmtAt=iso=>{try{return new Date(iso).toLocaleString([],{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}catch(e){return '';}};
+const fmtMin=m=>m>=60?(Math.round(m/6)/10)+'h':m+'m';
+function taskCard(t,doneIds){
+  const done=doneIds.includes(t.id);
+  const meta=[];
+  if(t.dueTime)meta.push('<span>⏰ '+esc(t.dueTime)+'</span>');
+  if(t.priority)meta.push('<span class="pill">'+esc(t.priority)+'</span>');
+  if(t.category)meta.push('<span class="pill">'+esc(t.category)+'</span>');
+  if(t.estimatedMinutes)meta.push('<span>~'+fmtMin(t.estimatedMinutes)+'</span>');
+  const subs=(t.subtasks||[]).map(s=>{const sd=typeof s==='object'?s.done:false,st=typeof s==='object'?(s.text||s.title):s;return '<span class="'+(sd?'sdone':'')+'">'+(sd?'☑':'☐')+' '+esc(st)+'</span>';}).join('');
+  return '<div class="card'+(t.isMIT?' mit':'')+(done?' done':'')+'">'
+    +'<div class="t">'+(done?'<span class="chk">✓</span>':'')+(t.isMIT?'<span class="star">★</span>':'')+esc(t.title)+'</div>'
+    +(meta.length?'<div class="meta">'+meta.join('')+'</div>':'')
+    +(subs?'<div class="subs">'+subs+'</div>':'')
+    +(t.notes?'<div class="notes">'+esc(t.notes)+'</div>':'')
+    +'</div>';
+}
+function projCard(p,kids){
+  let done=(p.steps||[]).filter(s=>s.done).length,total=(p.steps||[]).length;
+  kids.forEach(k=>{done+=(k.steps||[]).filter(s=>s.done).length;total+=(k.steps||[]).length;});
+  const meta=[];
+  if(p.priority)meta.push('<span class="pill">'+esc(p.priority)+'</span>');
+  if(p.category)meta.push('<span class="pill">'+esc(p.category)+'</span>');
+  const steps=(p.steps||[]).map(s=>'<span class="'+(s.done?'sdone':'')+'">'+(s.done?'☑':'☐')+' '+esc(s.text)+'</span>').join('');
+  return '<div class="card'+(p.completedAt?' done':'')+'">'
+    +'<div class="row"><div class="t">'+(p.completedAt?'<span class="chk">✓</span>':'')+esc(p.title)+'</div>'
+    +(total?'<span class="prog">'+done+'/'+total+' steps</span>':'')+'</div>'
+    +(meta.length?'<div class="meta">'+meta.join('')+'</div>':'')
+    +(total?'<div class="bar"><div style="width:'+Math.round(done/total*100)+'%"></div></div>':'')
+    +(steps?'<div class="steps">'+steps+'</div>':'')
+    +(p.notes?'<div class="notes">'+esc(p.notes)+'</div>':'')
+    +'</div>';
+}
+function render(d){
+  const td=tk();
+  const doneIds=(d.completions&&d.completions[td])||[];
+  const today=(d.tasks||[]).filter(t=>t.dueDate===td).sort((a,b)=>((a.dueTime||'zz').localeCompare(b.dueTime||'zz')));
+  const mits=today.filter(t=>t.isMIT),oth=today.filter(t=>!t.isMIT);
+  const projs=d.projects||[];
+  const tops=projs.filter(p=>!p.parentId);
+  const active=tops.filter(p=>!p.completedAt),comp=tops.filter(p=>p.completedAt);
+  let h='<header><h1>Ops Cal</h1><span class="upd">Updated '+fmtAt(d.generatedAt)+'</span></header>';
+  h+='<div class="ro">Read-only snapshot — '+new Date().toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'})+'</div>';
+  h+='<h2>★ Most important today</h2>';
+  h+=mits.length?mits.map(t=>taskCard(t,doneIds)).join(''):'<div class="empty">No MITs set.</div>';
+  h+='<h2>Today</h2>';
+  h+=oth.length?oth.map(t=>taskCard(t,doneIds)).join(''):'<div class="empty">Nothing else scheduled today.</div>';
+  h+='<h2>Projects</h2>';
+  h+=(active.length||comp.length)?active.map(p=>projCard(p,projs.filter(k=>k.parentId===p.id))).join('')+comp.map(p=>projCard(p,projs.filter(k=>k.parentId===p.id))).join(''):'<div class="empty">No projects.</div>';
+  h+='<div class="foot"><button onclick="location.reload()">↻ Refresh</button></div>';
+  $.className='';$.innerHTML=h;
+}
+async function load(){
+  if(!gid){$.innerHTML='This link is missing its ID. Ask for a fresh link from the app (Cloud settings → Live snapshot link).';return;}
+  try{
+    const r=await fetch('https://api.github.com/gists/'+encodeURIComponent(gid),{headers:{Accept:'application/vnd.github+json'}});
+    if(r.status===404)throw new Error('Snapshot not found — the link may be wrong or the data was moved.');
+    if(r.status===403||r.status===429)throw new Error('Too many refreshes — wait a minute and try again.');
+    if(!r.ok)throw new Error('Could not load ('+r.status+'). Try again in a moment.');
+    const j=await r.json();
+    const f=j.files&&j.files['snapshot.json'];
+    if(!f)throw new Error('No snapshot published yet. Open the app once and make any small edit — the snapshot publishes automatically.');
+    const text=f.truncated?await(await fetch(f.raw_url)).text():f.content;
+    render(JSON.parse(text));
+  }catch(e){$.className='state';$.innerHTML=esc(e.message||'Could not load.')+'<div class="foot"><button onclick="location.reload()">↻ Try again</button></div>';}
+}
+load();
+setInterval(load,5*60*1000);
+})();
+</script>
+</body>
+</html>
