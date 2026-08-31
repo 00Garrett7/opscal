@@ -33,6 +33,7 @@ h2{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;
 .steps .sdone{color:#78716c;text-decoration:line-through}
 .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .empty{color:#78716c;font-size:13px;padding:8px 0}
+.dayhdr{font-size:12px;font-weight:600;color:#d6d3d1;margin:12px 0 6px}
 .state{color:#a8a29e;text-align:center;padding:60px 16px}
 button{background:#292524;color:#d6d3d1;border:1px solid #44403c;border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer}
 button:hover{background:#3b3835}
@@ -84,7 +85,10 @@ function projCard(p,kids){
 function render(d){
   const td=tk();
   const doneIds=(d.completions&&d.completions[td])||[];
-  const today=(d.tasks||[]).filter(t=>t.dueDate===td).sort((a,b)=>((a.dueTime||'zz').localeCompare(b.dueTime||'zz')));
+  const all=(d.tasks||[]);
+  const today=all.filter(t=>t.dueDate===td).sort((a,b)=>((a.dueTime||'zz').localeCompare(b.dueTime||'zz')));
+  const up=all.filter(t=>t.dueDate&&t.dueDate>td).sort((a,b)=>(a.dueDate.localeCompare(b.dueDate))||((a.dueTime||'zz').localeCompare(b.dueTime||'zz')));
+  const fmtDay=iso=>{try{return new Date(iso+'T12:00').toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});}catch(e){return iso;}};
   const mits=today.filter(t=>t.isMIT),oth=today.filter(t=>!t.isMIT);
   const projs=d.projects||[];
   const tops=projs.filter(p=>!p.parentId);
@@ -95,8 +99,20 @@ function render(d){
   h+=mits.length?mits.map(t=>taskCard(t,doneIds)).join(''):'<div class="empty">No MITs set.</div>';
   h+='<h2>Today</h2>';
   h+=oth.length?oth.map(t=>taskCard(t,doneIds)).join(''):'<div class="empty">Nothing else scheduled today.</div>';
+  h+='<h2>Upcoming</h2>';
+  if(up.length){let lastDay='';up.forEach(t=>{if(t.dueDate!==lastDay){lastDay=t.dueDate;h+='<div class="dayhdr">'+fmtDay(t.dueDate)+'</div>';}h+=taskCard(t,[]);});}else h+='<div class="empty">Nothing scheduled ahead.</div>';
   h+='<h2>Projects</h2>';
   h+=(active.length||comp.length)?active.map(p=>projCard(p,projs.filter(k=>k.parentId===p.id))).join('')+comp.map(p=>projCard(p,projs.filter(k=>k.parentId===p.id))).join(''):'<div class="empty">No projects.</div>';
+  const nts=(d.notes||[]).slice().sort((a,b)=>((b.updatedAt||'').localeCompare(a.updatedAt||'')));
+  h+='<h2>Notes</h2>';
+  h+=nts.length?nts.map(n=>{
+    const links=[];
+    const np=n.projectId&&projs.find(p=>p.id===n.projectId);if(np)links.push('<span class="pill">📁 '+esc(np.title)+'</span>');
+    const na=n.taskId&&all.find(t=>t.id===n.taskId);if(na)links.push('<span class="pill">📅 '+esc(na.title)+'</span>');
+    return '<div class="card"><div class="row"><div class="t">'+esc(n.title)+'</div><span class="prog">'+fmtAt(n.updatedAt)+'</span></div>'
+      +(links.length?'<div class="meta">'+links.join('')+'</div>':'')
+      +(n.body?'<div class="notes">'+esc(n.body)+'</div>':'')+'</div>';
+  }).join(''):'<div class="empty">No notes.</div>';
   h+='<div class="foot"><button onclick="location.reload()">↻ Refresh</button></div>';
   $.className='';$.innerHTML=h;
 }
